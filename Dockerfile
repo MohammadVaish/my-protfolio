@@ -1,45 +1,42 @@
 FROM php:8.3-cli
 
-# System dependencies
+# PHP extensions + Node.js
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
     zip \
+    curl \
     libzip-dev \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
-    sqlite3 \
-    libsqlite3-dev \
-    && docker-php-ext-install pdo pdo_mysql pdo_sqlite zip
+    && docker-php-ext-install pdo pdo_mysql zip
+
+# Install Node.js 22
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Working directory
 WORKDIR /var/www
 
-# Copy project
 COPY . .
 
-# Install PHP dependencies
+# PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Create .env
-RUN cp .env.example .env
+# Node dependencies
+RUN npm install
 
-# Fix environment
-RUN sed -i 's/SESSION_DRIVER=database/SESSION_DRIVER=file/' .env && \
-    sed -i 's/CACHE_STORE=database/CACHE_STORE=file/' .env && \
-    sed -i 's/QUEUE_CONNECTION=database/QUEUE_CONNECTION=sync/' .env
-
-# Create SQLite database
-RUN mkdir -p database && touch database/database.sqlite
+# Build Vite assets
+RUN npm run build
 
 # Laravel setup
+RUN cp .env.example .env
+
 RUN php artisan key:generate --force
 
-# Clear cache
 RUN php artisan config:clear
 RUN php artisan cache:clear
 RUN php artisan route:clear
