@@ -1,6 +1,6 @@
 FROM php:8.3-cli
 
-# Install system packages + Node.js
+# Install system packages
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -21,39 +21,38 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Set working directory
 WORKDIR /var/www
 
-# Copy project
+# Copy project files
 COPY . .
 
 # Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Install Node dependencies
-RUN npm ci || npm install
+RUN npm install
 
 # Build Vite assets
 RUN npm run build
 
-# Check build output
-RUN ls -la public/build
-
-# Laravel setup
+# Prepare Laravel
 RUN cp .env.example .env
 
+# Generate APP_KEY
 RUN php artisan key:generate --force
 
-# Clear caches
-RUN php artisan config:clear
-RUN php artisan cache:clear
-RUN php artisan route:clear
-RUN php artisan view:clear
+# Ensure storage directories exist
+RUN mkdir -p storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs
 
-# Rebuild caches
-RUN php artisan config:cache
-RUN php artisan route:cache
-RUN php artisan view:cache
+# Set permissions
+RUN chmod -R 775 storage bootstrap/cache
 
+# Expose Render port
 EXPOSE 10000
 
+# Start Laravel
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=10000"]
